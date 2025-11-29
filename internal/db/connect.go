@@ -1,15 +1,12 @@
 package db
 
-
 import (
+	"database/sql"
 	"fmt"
 	"os"
-	"database/sql"
+
 	_ "github.com/lib/pq"
-
 )
-
-const port = 5432
 
 func getEnv(env_key string, default_value string) string {
 	value := os.Getenv(env_key)
@@ -19,16 +16,14 @@ func getEnv(env_key string, default_value string) string {
 	return value
 }
 
-
 func getDSN() string {
-	user := getEnv("POSTGRES_USER", "user")
-	password := getEnv("POSTGRES_PASSWORD", "supersecret123")
-	host := getEnv("POSTGRES_HOST", "localhost")
-	db := getEnv("POSTGRES_DB", "mydb")
-
-	DSN := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", user, password, host, port, db) 
-
-	return DSN
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_DB"),
+	)
 }
 
 func OpenDB() (*sql.DB, error) {
@@ -36,9 +31,8 @@ func OpenDB() (*sql.DB, error) {
 	DSN := getDSN()
 
 	return sql.Open("postgres", DSN)
-	
-}
 
+}
 
 func CloseDB(database *sql.DB) {
 	database.Close()
@@ -59,10 +53,7 @@ func GetDatabase() (*sql.DB, error) {
 		CloseDB(database)
 		return nil, ping_err
 
-		
 	}
 
 	return database, nil
 }
-
-

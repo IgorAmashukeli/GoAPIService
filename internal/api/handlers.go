@@ -3,6 +3,7 @@ package api
 import (
 	"HighTalent/internal/db"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,8 +17,9 @@ func GetAllQuestionsHandler(question_db gorm.Interface[db.Question]) http.Handle
 	return func(w http.ResponseWriter, r *http.Request) {
 		questions, err := ReadAllQuestionsFunc(question_db, r.Context())
 		if err != nil {
-			http.Error(w, "failed to fetch questions", http.StatusInternalServerError)
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
+
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -82,8 +84,13 @@ func ReadQuestionHandler(question_db gorm.Interface[db.Question], answer_db gorm
 		question, answers, read_err := ReadQuestionGetAllAnsFunc(question_db, answer_db, r.Context(), uint(int_id))
 
 		if read_err != nil {
-			http.Error(w, "failed to find a question", http.StatusInternalServerError)
-			return
+			if errors.Is(read_err, gorm.ErrRecordNotFound) {
+				http.Error(w, "question not found", http.StatusNotFound)
+				return
+			} else {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -113,14 +120,19 @@ func DeleteQuestionHandler(question_db gorm.Interface[db.Question]) http.Handler
 		_, read_err := ReadQuestionFunc(question_db, r.Context(), uint(int_id))
 
 		if read_err != nil {
-			http.Error(w, "failed to find a question", http.StatusInternalServerError)
-			return
+			if errors.Is(read_err, gorm.ErrRecordNotFound) {
+				http.Error(w, "question not found", http.StatusNotFound)
+				return
+			} else {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		delete_err := DeleteQuestionFunc(question_db, r.Context(), uint(int_id))
 
 		if delete_err != nil {
-			http.Error(w, "failed to delete a question", http.StatusInternalServerError)
+			http.Error(w, "internal error", http.StatusInternalServerError)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -159,8 +171,13 @@ func CreateAnswerHandler(question_db gorm.Interface[db.Question], answer_db gorm
 		}
 
 		if err := CreateAnswerFunc(question_db, answer_db, r.Context(), uint(int_id), req.UserId, req.Text); err != nil {
-			http.Error(w, "failed to create answer", http.StatusInternalServerError)
-			return
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				http.Error(w, "question not found", http.StatusNotFound)
+				return
+			} else {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -182,8 +199,13 @@ func ReadAnswerHandler(question_db gorm.Interface[db.Question], answer_db gorm.I
 
 		answer, answer_err := ReadAnswerFunc(answer_db, r.Context(), uint(int_id))
 		if answer_err != nil {
-			http.Error(w, "failed to find answer", http.StatusInternalServerError)
-			return
+			if errors.Is(answer_err, gorm.ErrRecordNotFound) {
+				http.Error(w, "answer not found", http.StatusNotFound)
+				return
+			} else {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -210,15 +232,20 @@ func DeleteAnswerHandler(answer_db gorm.Interface[db.Answer]) http.HandlerFunc {
 
 		_, answer_err := ReadAnswerFunc(answer_db, r.Context(), uint(int_id))
 		if answer_err != nil {
-			http.Error(w, "failed to find answer", http.StatusInternalServerError)
-			return
+			if errors.Is(answer_err, gorm.ErrRecordNotFound) {
+				http.Error(w, "answer not found", http.StatusNotFound)
+				return
+			} else {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 
 		delete_answer_err := DeleteAnswerFunc(answer_db, r.Context(), uint(int_id))
 		if delete_answer_err != nil {
-			http.Error(w, "failed to delete answer", http.StatusInternalServerError)
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 

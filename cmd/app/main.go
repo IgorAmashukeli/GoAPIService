@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"net/http"
+
 	//"time"
 	//"gorm.io/gorm"
 	//"fmt"
@@ -39,10 +41,6 @@ func DoMigrations(database *sql.DB) {
 	}
 }
 
-//
-// TESTS
-//
-
 func main() {
 	// connection
 	database := Connect()
@@ -55,11 +53,16 @@ func main() {
 	log.Println("Succesfull migration")
 
 	// prepare db clients
-	question_db, answer_db, _ := db.PrepareDBClients(database)
+	question_db, answer_db, ctx := db.PrepareDBClients(database)
+
+	if ctx == nil {
+		log.Fatalf("%v", errors.New("gorm prepare error"))
+	}
 
 	//create api
 	mux := api.CreateApi(question_db, answer_db)
 
 	// listen
+	log.Println("Server starting on port 8080...")
 	http.ListenAndServe(":8080", mux)
 }

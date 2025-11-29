@@ -3,8 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -15,9 +13,8 @@ func PrepareDBClients(database *sql.DB) (gorm.Interface[Question],
 	gorm_db, gorm_err := GetGormDatabase(database)
 	if gorm_err != nil {
 		CloseDB(database)
-		log.Fatalf("%v", gorm_err)
+		return nil, nil, nil
 	}
-	log.Println("Succesfull gorm driver")
 
 	question_db := GetQuestionsDB(gorm_db)
 	answer_db := GetAnswersDB(gorm_db)
@@ -50,7 +47,7 @@ func ReadQuestionGetAllAnswers(question_db gorm.Interface[Question], answer_db g
 
 	answers, answer_err := answer_db.Where("question_id = ?", id).Find(ctx)
 	if answer_err != nil {
-		return q, nil, err
+		return q, nil, answer_err
 	}
 
 	return q, answers, nil
@@ -73,7 +70,7 @@ func CreateValidatedAnswer(question_db gorm.Interface[Question], answer_db gorm.
 	_, err := ReadQuestion(question_db, ctx, question_id)
 
 	if err != nil {
-		return fmt.Errorf("cannot create answer: question %d does not exists", question_id)
+		return err
 	}
 
 	return CreateAnswer(answer_db, ctx, question_id, user_id, text)

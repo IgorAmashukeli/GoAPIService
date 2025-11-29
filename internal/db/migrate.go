@@ -1,18 +1,18 @@
 package db
 
 import (
-	"embed"
 	"database/sql"
-	"github.com/pressly/goose/v3"
-	_ "github.com/lib/pq"
-)
+	"embed"
 
+	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
+)
 
 //go:embed migrations/*.sql
 var migrationsFs embed.FS
 
 func InitMigrationDir() {
-	goose.SetBaseFS(migrationsFs)
+	goose.SetBaseFS(&migrationsFs)
 }
 
 func MigrateUp(db *sql.DB) error {
@@ -26,9 +26,3 @@ func MigrateDown(db *sql.DB) error {
 func MigrateStatus(db *sql.DB) error {
 	return goose.Status(db, "migrations")
 }
-
-
-
-
-
-

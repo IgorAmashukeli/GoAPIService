@@ -45,7 +45,7 @@ func TestGetAllQuestionsDbError(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to fetch questions")
+	assert.Contains(t, w.Body.String(), "internal error")
 }
 
 func TestCreateQuestionSuccess(t *testing.T) {
@@ -181,7 +181,25 @@ func TestReadQuestionDbErrorInDb(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to find a question")
+	assert.Contains(t, w.Body.String(), "internal error")
+
+}
+
+func TestReadQuestionDbErrorNotFound(t *testing.T) {
+	ReadQuestionGetAllAnsFunc = func(_ gorm.Interface[db.Question], _ gorm.Interface[db.Answer], _ context.Context, id uint) (db.Question, []db.Answer, error) {
+		return db.Question{ID: 1, Text: "Test Question 1"},
+			[]db.Answer{{ID: 1, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Igor", Text: "Text Answer 1"},
+				{ID: 2, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Artem", Text: "Text Answer 1"}}, gorm.ErrRecordNotFound
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/questions/1", nil)
+	w := httptest.NewRecorder()
+
+	handler := ReadQuestionHandler(nil, nil)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "question not found")
 
 }
 
@@ -246,6 +264,25 @@ func TestDeleteQuestionDbInvalidIdNegative(t *testing.T) {
 
 func TestDeleteQuestionDbNotFound(t *testing.T) {
 	ReadQuestionFunc = func(_ gorm.Interface[db.Question], _ context.Context, id uint) (db.Question, error) {
+		return db.Question{ID: 1, Text: "Test Question 1"}, gorm.ErrRecordNotFound
+	}
+
+	DeleteQuestionFunc = func(_ gorm.Interface[db.Question], _ context.Context, id uint) error {
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/questions/1", nil)
+	w := httptest.NewRecorder()
+
+	handler := DeleteQuestionHandler(nil)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "question not found")
+}
+
+func TestDeleteQuestionDbErrorDbFind(t *testing.T) {
+	ReadQuestionFunc = func(_ gorm.Interface[db.Question], _ context.Context, id uint) (db.Question, error) {
 		return db.Question{ID: 1, Text: "Test Question 1"}, errors.New("db failure")
 	}
 
@@ -260,10 +297,10 @@ func TestDeleteQuestionDbNotFound(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to find a question")
+	assert.Contains(t, w.Body.String(), "internal error")
 }
 
-func TestDeleteQuestionDbErrorDb(t *testing.T) {
+func TestDeleteQuestionDbErrorDbDelete(t *testing.T) {
 	ReadQuestionFunc = func(_ gorm.Interface[db.Question], _ context.Context, id uint) (db.Question, error) {
 		return db.Question{ID: 1, Text: "Test Question 1"}, nil
 	}
@@ -279,7 +316,7 @@ func TestDeleteQuestionDbErrorDb(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to delete a question")
+	assert.Contains(t, w.Body.String(), "internal error")
 }
 
 func TestCreateAnswerDbSuccess(t *testing.T) {
@@ -380,7 +417,7 @@ func TestCreateAnswerDbInvalidJson(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "invalid JSON")
 }
 
-func TestCreateAnswerDB(t *testing.T) {
+func TestCreateAnswerDBError(t *testing.T) {
 	CreateAnswerFunc = func(_ gorm.Interface[db.Question], _ gorm.Interface[db.Answer], _ context.Context, _ uint, _ string, _ string) error {
 		return errors.New("db failure")
 	}
@@ -402,7 +439,33 @@ func TestCreateAnswerDB(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to create answer")
+	assert.Contains(t, w.Body.String(), "internal error")
+
+}
+
+func TestCreateAnswerDBNotFound(t *testing.T) {
+	CreateAnswerFunc = func(_ gorm.Interface[db.Question], _ gorm.Interface[db.Answer], _ context.Context, _ uint, _ string, _ string) error {
+		return gorm.ErrRecordNotFound
+	}
+
+	type RequestBody struct {
+		Text   string `json:"text"`
+		UserId string `json:"user_id"`
+	}
+
+	body, _ := json.Marshal(RequestBody{
+		Text:   "What is Golang?",
+		UserId: "Igor",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/questions/1/answers/", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	handler := CreateAnswerHandler(nil, nil)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "question not found")
 
 }
 
@@ -463,7 +526,22 @@ func TestReadAnswerBdError(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to find answer")
+	assert.Contains(t, w.Body.String(), "internal error")
+}
+
+func TestReadAnswerNotFound(t *testing.T) {
+	ReadAnswerFunc = func(_ gorm.Interface[db.Answer], _ context.Context, _ uint) (db.Answer, error) {
+		return db.Answer{ID: 1, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Igor", Text: "Test Answer 1"}, gorm.ErrRecordNotFound
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/answers/1", nil)
+	w := httptest.NewRecorder()
+
+	handler := ReadAnswerHandler(nil, nil)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "answer not found")
 }
 
 func TestDeleteAnswerSuccess(t *testing.T) {
@@ -526,7 +604,7 @@ func TestDeleteAnswerInvalidIdNegative(t *testing.T) {
 
 }
 
-func TestDeleteAnswerNotFound(t *testing.T) {
+func TestDeleteAnswerErrorDbRead(t *testing.T) {
 	ReadAnswerFunc = func(_ gorm.Interface[db.Answer], _ context.Context, _ uint) (db.Answer, error) {
 		return db.Answer{ID: 1, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Igor", Text: "Test Answer 1"}, errors.New("db failure")
 	}
@@ -542,10 +620,10 @@ func TestDeleteAnswerNotFound(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to find answer")
+	assert.Contains(t, w.Body.String(), "internal error")
 }
 
-func TestDeleteAnswerErrorDb(t *testing.T) {
+func TestDeleteAnswerErrorDbDelete(t *testing.T) {
 	ReadAnswerFunc = func(_ gorm.Interface[db.Answer], _ context.Context, _ uint) (db.Answer, error) {
 		return db.Answer{ID: 1, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Igor", Text: "Test Answer 1"}, nil
 	}
@@ -561,5 +639,24 @@ func TestDeleteAnswerErrorDb(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-	assert.Contains(t, w.Body.String(), "failed to delete answer")
+	assert.Contains(t, w.Body.String(), "internal error")
+}
+
+func TestDeleteAnswerNotFound(t *testing.T) {
+	ReadAnswerFunc = func(_ gorm.Interface[db.Answer], _ context.Context, _ uint) (db.Answer, error) {
+		return db.Answer{ID: 1, QuestionID: 1, Question: db.Question{ID: 1, Text: "Test Question 1"}, UserID: "Igor", Text: "Test Answer 1"}, gorm.ErrRecordNotFound
+	}
+
+	DeleteAnswerFunc = func(_ gorm.Interface[db.Answer], _ context.Context, _ uint) error {
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/answers/1", nil)
+	w := httptest.NewRecorder()
+
+	handler := DeleteAnswerHandler(nil)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "answer not found")
 }
